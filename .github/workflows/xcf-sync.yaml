@@ -1,0 +1,91 @@
+# Test bed: automatic XCF layer sync for urth-atlas.
+#
+# Any push that touches `maps/source/urth.xcf` exports the mapped layers
+# with headless GIMP 3 and commits the PNGs back into this repo.
+# urth-atlas pulls `atlas/*.png` from here (see its `map-imagery.yml`).
+#
+# | XCF layer              | atlas file              | atlas use              |
+# |------------------------|-------------------------|------------------------|
+# | Labels/Cities          | atlas/cities.png        | city markers           |
+# | Labels/Sub-National    | atlas/subnational.png   | subnational markers    |
+# | Political              | atlas/blank-political.png | base political map   |
+# | Labels/National        | atlas/national.png      | NEW (wired, undisplayed) |
+# | Ocean                  | atlas/ocean.png         | NEW (wired, undisplayed) |
+#
+# Local test: pip install "git+https://github.com/EmjayBot/xcf-git-sync.git"
+#   xcf-git-sync --config xcf-sync.yaml --once
+#   xcf-git-sync --xcf maps/source/urth.xcf --repo . --list-layers \
+#     --include "National,Cities,Sub-National,Political,Ocean"
+
+name: xcf-sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - "maps/source/urth.xcf"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xcf-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GIMP 3 (Flatpak, official builds)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q flatpak
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y flathub org.gimp.GIMP
+          for c in gimp-console-3.2 gimp-console-3.0 gimp-console-3 gimp-console; do
+            if flatpak run --command="$c" org.gimp.GIMP --version >/dev/null 2>&1; then
+              echo "GIMP_BIN=flatpak run --command=$c org.gimp.GIMP" >> "$GITHUB_ENV"
+              break
+            fi
+          done
+          test -n "$GIMP_BIN" || { echo "no gimp-console in flatpak"; exit 1; }
+          echo "Using: $GIMP_BIN"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install xcf-git-sync
+        run: pip install "git+https://github.com/EmjayBot/xcf-git-sync.git"
+
+      - name: Export layers
+        run: >
+          xcf-git-sync
+          --xcf maps/source/urth.xcf --repo . --out assets/xcf_layers --once
+          --include "National,Cities,Sub-National,Political,Ocean"
+          --gimp-bin "$GIMP_BIN"
+          --timeout 600
+
+      - name: Map to atlas filenames
+        run: |
+          mkdir -p atlas
+          cp assets/xcf_layers/urth/Labels/Cities.png        atlas/cities.png
+          cp assets/xcf_layers/urth/Labels/Sub-National.png  atlas/subnational.png
+          cp assets/xcf_layers/urth/Political.png            atlas/blank-political.png
+          cp assets/xcf_layers/urth/Labels/National.png      atlas/national.png
+          cp assets/xcf_layers/urth/Ocean.png                atlas/ocean.png
+          ls -la atlas
+
+      - name: Commit PNGs back
+        run: |
+          git config user.name "xcf-sync-bot"
+          git config user.email "xcf-sync-bot@users.noreply.github.com"
+          git add atlas assets/xcf_layers
+          git diff --cached --quiet && echo "No layer changes." || {
+            git commit -m "auto: sync layers from maps/source/urth.xcf"
+            git push
+          }

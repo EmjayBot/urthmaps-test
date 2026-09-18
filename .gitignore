@@ -1,0 +1,4 @@
+# xcf outputs are committed on purpose (urth-atlas pulls them).
+# Keep local scratch out:
+*.tmp
+__pycache__/

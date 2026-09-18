@@ -1,0 +1,11 @@
+# xcf-sync config for urthmaps-test.
+# Run locally with:  xcf-git-sync --config xcf-sync.yaml
+# (pip install "git+https://github.com/EmjayBot/xcf-git-sync.git")
+watch:
+  xcf: maps/source/urth.xcf
+  repo: .
+  out: ./assets/xcf_layers
+  auto_push: true
+  only_visible: true
+  timeout: 600
+  include: "National,Cities,Sub-National,Political,Ocean"
