@@ -84,6 +84,7 @@ jobs:
           ls -la atlas
 
       - name: Commit PNGs back
+        id: commit
         run: |
           git config user.name "xcf-sync-bot"
           git config user.email "xcf-sync-bot@users.noreply.github.com"
@@ -91,4 +92,17 @@ jobs:
           git diff --cached --quiet && echo "No layer changes." || {
             git commit -m "auto: sync layers from maps/source/urth.xcf"
             git push
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
           }
+
+      # Tell urth-atlas new imagery is ready (needs ATLAS_DISPATCH_TOKEN:
+      # a classic PAT with `public_repo` scope stored as a repo secret).
+      # Skipped silently until the secret exists, so nothing fails first.
+      - name: Notify urth-atlas
+        if: steps.commit.outputs.pushed == 'true' && secrets.ATLAS_DISPATCH_TOKEN != ''
+        run: |
+          curl -fSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.ATLAS_DISPATCH_TOKEN }}" \
+            https://api.github.com/repos/EmjayBot/urth-atlas/dispatches \
+            -d '{"event_type":"imagery-update"}'
