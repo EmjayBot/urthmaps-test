@@ -66,10 +66,13 @@ jobs:
         run: pip install "git+https://github.com/EmjayBot/xcf-git-sync.git"
 
       - name: Export layers
+        # --no-only-visible: the 5 watched layers export by NAME even when
+        # hidden in the working XCF (artists often hide layers mid-edit).
         run: >
           xcf-git-sync
           --xcf maps/source/urth.xcf --repo . --out assets/xcf_layers --once
           --include "National,Cities,Sub-National,Political,Ocean"
+          --no-only-visible
           --gimp-bin "$GIMP_BIN"
           --timeout 600
 
