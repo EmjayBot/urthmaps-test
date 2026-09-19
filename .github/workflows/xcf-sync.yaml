@@ -97,12 +97,19 @@ jobs:
 
       # Tell urth-atlas new imagery is ready (needs ATLAS_DISPATCH_TOKEN:
       # a classic PAT with `public_repo` scope stored as a repo secret).
-      # Skipped silently until the secret exists, so nothing fails first.
+      # NOTE: `secrets.*` is not allowed in `if:` expressions, so the
+      # presence check lives inside the script via $ATLAS_DISPATCH_TOKEN.
       - name: Notify urth-atlas
-        if: steps.commit.outputs.pushed == 'true' && secrets.ATLAS_DISPATCH_TOKEN != ''
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          ATLAS_DISPATCH_TOKEN: ${{ secrets.ATLAS_DISPATCH_TOKEN }}
         run: |
+          if [ -z "$ATLAS_DISPATCH_TOKEN" ]; then
+            echo "No ATLAS_DISPATCH_TOKEN secret; skipping notify."
+            exit 0
+          fi
           curl -fSL -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.ATLAS_DISPATCH_TOKEN }}" \
+            -H "Authorization: Bearer $ATLAS_DISPATCH_TOKEN" \
             https://api.github.com/repos/EmjayBot/urth-atlas/dispatches \
             -d '{"event_type":"imagery-update"}'
